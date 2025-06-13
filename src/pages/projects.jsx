@@ -8,40 +8,63 @@ export default function Projects() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up real-time listener
-    const unsubscribe = onSnapshot(
-      collection(db, 'projects'),
-      (snapshot) => {
-        const allProjects = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          allProjects.push({
-            docId: doc.id, // Firestore document ID
-            id: data.id,
-            name: data.name,
-            userEmail: data.userEmail,
-            userId: data.userId,
-            status: data.status,
-            imageCount: data.imageCount,
-            createdAt: data.createdAt,
-            images: data.images || [],
-            queuePosition: data.queuePosition
+    let unsubscribe = null;
+    
+    const setupListener = () => {
+      console.log('Setting up real-time listener...');
+      unsubscribe = onSnapshot(
+        collection(db, 'projects'),
+        (snapshot) => {
+          console.log('Real-time update received. Document count:', snapshot.size);
+          const allProjects = [];
+          
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            console.log('Project document:', doc.id, data);
+            
+            // Only add projects with valid data
+            if (data && data.name && data.userEmail) {
+              allProjects.push({
+                docId: doc.id, // Firestore document ID
+                id: data.id,
+                name: data.name,
+                userEmail: data.userEmail,
+                userId: data.userId,
+                status: data.status,
+                imageCount: data.imageCount,
+                createdAt: data.createdAt,
+                images: data.images || [],
+                queuePosition: data.queuePosition
+              });
+            }
           });
-        });
-        
-        // Sort by creation date (newest first)
-        allProjects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setProjects(allProjects);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error listening to projects:', error);
-        setLoading(false);
-      }
-    );
+          
+          // Sort by creation date (newest first)
+          allProjects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          console.log('Processed projects:', allProjects.length);
+          setProjects(allProjects);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error listening to projects:', error);
+          setLoading(false);
+          // Fallback to manual loading if real-time fails
+          setTimeout(() => {
+            loadAllProjects();
+          }, 1000);
+        }
+      );
+    };
+
+    setupListener();
 
     // Cleanup listener on unmount
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) {
+        console.log('Cleaning up real-time listener');
+        unsubscribe();
+      }
+    };
   }, []);
 
   const loadAllProjects = async () => {
@@ -82,11 +105,41 @@ export default function Projects() {
     }
 
     try {
-      await deleteDoc(doc(db, 'projects', project.docId));
-      // No need to update local state - real-time listener will handle it
+      console.log('Deleting project:', project);
+      
+      // If we have the Firestore document ID, use it directly
+      if (project.docId) {
+        await deleteDoc(doc(db, 'projects', project.docId));
+        console.log('Project deleted successfully using docId');
+      } else {
+        // Fallback: find the document by project ID
+        const q = query(
+          collection(db, 'projects'),
+          where('id', '==', project.id)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          alert('Project not found in database');
+          return;
+        }
+
+        // Delete the first matching document
+        const docToDelete = querySnapshot.docs[0];
+        await deleteDoc(doc(db, 'projects', docToDelete.id));
+        console.log('Project deleted successfully using fallback method');
+      }
+      
+      // Force a manual refresh after deletion to ensure UI updates
+      setTimeout(() => {
+        console.log('Forcing refresh after deletion...');
+        loadAllProjects();
+      }, 500);
+      
     } catch (error) {
       console.error('Error deleting project:', error);
-      alert(`Failed to delete project: ${error.message}`);
+      alert(`Failed to delete project: ${error.message || 'Unknown error occurred'}`);
     }
   };
 
@@ -127,6 +180,12 @@ export default function Projects() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-zinc-900">All Projects ({projects.length})</h2>
               <div className="flex items-center space-x-2">
+                <button 
+                  onClick={loadAllProjects}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Refresh
+                </button>
                 <div className="flex items-center text-sm text-green-600">
                   <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
                   Live Updates
@@ -185,20 +244,13 @@ export default function Projects() {
                     {/* First 4 Images */}
                     <div className="grid grid-cols-4 gap-1 mb-3">
                       {project.images.slice(0, 4).map((image, index) => (
-                        <div key={index} className="aspect-square bg-zinc-200 rounded overflow-hidden">
-                          {image.data || (typeof image === 'string' && image.startsWith('data:')) ? (
-                            <img
-                              src={image.data || image}
-                              alt={`${project.name} - Image ${index + 1}`}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xs" style={{display: image.data || (typeof image === 'string' && image.startsWith('data:')) ? 'none' : 'flex'}}>
+                        <div key={index} className="aspect-square bg-zinc-200 rounded overflow-hidden relative">
+                          <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xs bg-zinc-100">
                             📷
+                          </div>
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-purple-500 opacity-20"></div>
+                          <div className="absolute inset-2 bg-white rounded flex items-center justify-center text-xs text-zinc-600 font-medium">
+                            IMG {index + 1}
                           </div>
                         </div>
                       ))}
