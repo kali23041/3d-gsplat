@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party components keep their own licenses. This includes the scrcpy
-server (Apache 2.0), UxPlay (GPL-3.0, installed separately and not bundled),
-Signalsmith Stretch (MIT), Vosk / vosk-browser (Apache 2.0), RNNoise /
-web-noise-suppressor, ffmpeg-static / FFmpeg and Android SDK Platform-Tools.
-See the Credits section of README.md.
